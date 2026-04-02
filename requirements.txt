@@ -1,23 +1,12 @@
-# UI
 streamlit
-
-# LangChain Ecosystem
-langchain
 langchain-core
 langchain-community
 langchain-text-splitters
 langchain-huggingface
-
-# Machine Learning & Embeddings
 huggingface-hub
 sentence-transformers
 transformers
 torch
 torchvision
-
-# Vector Database
 faiss-cpu
-
-# YouTube Transcript & Video parsing
-youtube-transcript-api
-pytube
+requests
