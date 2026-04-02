@@ -22,7 +22,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; background-colo
 [data-testid="stSidebar"] { background: var(--bg-card) !important; border-right: 1px solid var(--border); } [data-testid="stSidebar"] * { color: var(--text-primary) !important; }
 .brand-header { display: flex; align-items: center; gap: 12px; margin-bottom: 2rem; } .brand-icon { width: 44px; height: 44px; background: var(--accent-red); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px var(--accent-dim); } .brand-name { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg, #FF2D55, #FF6B6B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; } .brand-sub { font-size: 11px; color: var(--text-muted); font-family: 'Space Mono', monospace; margin-top: -4px; }
 .pipeline-wrapper { display: flex; align-items: center; gap: 0; margin: 1.5rem 0 2rem; overflow-x: auto; padding-bottom: 4px; } .step-box { display: flex; flex-direction: column; align-items: center; min-width: 90px; padding: 10px 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; color: var(--text-muted); text-align: center; transition: all 0.3s ease; flex-shrink: 0; } .step-box.active { background: var(--step-done); border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 12px var(--accent-glow); } .step-icon { font-size: 18px; margin-bottom: 4px; } .step-arrow { color: var(--border); font-size: 14px; padding: 0 4px; flex-shrink: 0; } .step-arrow.active { color: var(--accent-red); }
-.info-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; } .info-card h4 { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; } .info-card .value { font-size: 15px; color: var(--text-primary); font-weight: 500; } .stat-row { display: flex; gap: 12px; margin-bottom: 16px; } .stat-pill { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; } .stat-pill .num { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; color: var(--accent-red); } .stat-pill .label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .chat-container { display: flex; flex-direction: column; gap: 14px; margin: 1rem 0; } .msg-user { align-self: flex-end; background: var(--accent-red); color: white; padding: 12px 16px; border-radius: 18px 18px 4px 18px; max-width: 78%; font-size: 14px; line-height: 1.5; box-shadow: 0 4px 14px var(--accent-dim); } .msg-bot { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 14px 18px; border-radius: 18px 18px 18px 4px; max-width: 85%; font-size: 14px; line-height: 1.6; } .msg-label { font-family: 'Space Mono', monospace; font-size: 10px; margin-bottom: 4px; } .msg-label.user { color: #FF6B6B; text-align: right; } .msg-label.bot { color: var(--text-muted); }
 .stTextInput input, .stTextArea textarea { background: var(--bg-input) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; color: var(--text-primary) !important; font-family: 'DM Sans', sans-serif !important; } .stTextInput input:focus, .stTextArea textarea:focus { border-color: var(--accent-red) !important; box-shadow: 0 0 0 2px var(--accent-glow) !important; } .stButton button { background: var(--accent-red) !important; color: white !important; border: none !important; border-radius: 10px !important; font-family: 'Space Mono', monospace !important; font-size: 13px !important; font-weight: 700 !important; letter-spacing: 0.5px !important; padding: 0.55rem 1.2rem !important; transition: all 0.2s ease !important; box-shadow: 0 4px 14px var(--accent-dim) !important; } .stButton button:hover { transform: translateY(-1px) !important; box-shadow: 0 6px 20px var(--accent-dim) !important; } .stSelectbox select, div[data-baseweb="select"] { background: var(--bg-input) !important; border-color: var(--border) !important; } div[data-baseweb="select"] * { background: var(--bg-input) !important; color: var(--text-primary) !important; } .stSpinner > div { border-top-color: var(--accent-red) !important; } .stSuccess, .stInfo, .stWarning, .stError { border-radius: 10px !important; } hr { border-color: var(--border) !important; }
 .welcome-box { background: var(--bg-card); border: 1px dashed var(--border); border-radius: 18px; padding: 50px 30px; text-align: center; margin: 2rem 0; } .welcome-box h2 { font-family: 'Space Mono', monospace; font-size: 18px; color: var(--text-primary); margin-bottom: 10px; } .welcome-box p { color: var(--text-muted); font-size: 14px; line-height: 1.7; } .welcome-icon { font-size: 48px; margin-bottom: 16px; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg-primary); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -47,9 +46,25 @@ def load_embeddings_model():
         encode_kwargs={"normalize_embeddings": True},
     )
 
+def extract_text_from_json(obj) -> list:
+    """Smartly digs through any JSON structure to find transcript text."""
+    texts = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in ['text', 'utf8', 'transcript'] and isinstance(v, str) and v.strip():
+                texts.append(v.strip())
+            else:
+                texts.extend(extract_text_from_json(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            texts.extend(extract_text_from_json(item))
+    return texts
+
 def get_transcript_via_rapidapi(video_id: str, api_key: str, api_host: str) -> str:
-    url = f"https://{api_host}/api/transcript"
-    querystring = {"video_id": video_id}
+    """Fetches the transcript using the youtube138 RapidAPI endpoint."""
+    # youtube138 uses /video/transcript/ and parameter "id"
+    url = f"https://{api_host}/video/transcript/"
+    querystring = {"id": video_id}
     headers = {"x-rapidapi-key": api_key, "x-rapidapi-host": api_host}
 
     response = requests.get(url, headers=headers, params=querystring)
@@ -57,18 +72,12 @@ def get_transcript_via_rapidapi(video_id: str, api_key: str, api_host: str) -> s
         raise ValueError(f"RapidAPI Error ({response.status_code}): {response.text}")
     
     data = response.json()
-    try:
-        if isinstance(data, list):
-            return " ".join([item.get('text', '') for item in data])
-        elif isinstance(data, dict):
-            if 'transcript' in data:
-                return " ".join([item.get('text', '') for item in data['transcript']])
-            elif 'data' in data:
-                return str(data['data'])
-            else:
-                return str(data)
-    except Exception as e:
-        raise ValueError(f"Could not parse transcript data from API: {str(e)}")
+    extracted_texts = extract_text_from_json(data)
+    
+    if not extracted_texts:
+        raise ValueError("Could not find any text in the API response. The video might not have captions.")
+        
+    return " ".join(extracted_texts)
 
 def build_vectorstore(transcript: str, embeddings):
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100, separators=["\n\n", "\n", ". ", " ", ""])
@@ -92,10 +101,10 @@ defaults = {"vectorstore": None, "transcript": None, "num_chunks": 0, "video_id"
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# Keys are now strictly loaded from the backend (secrets)
+# Keys are explicitly loaded from the backend secrets
 hf_token = st.secrets["HUGGINGFACE_TOKEN"]
 rapidapi_key = st.secrets["RAPIDAPI_KEY"]
-rapidapi_host = "youtube-transcript3.p.rapidapi.com"
+rapidapi_host = "youtube138.p.rapidapi.com" # UPDATED HOST
 
 with st.sidebar:
     st.markdown("<div class='brand-header'><div class='brand-icon'>▶</div><div><div class='brand-name'>TubeChat</div><div class='brand-sub'>YouTube × GenAI</div></div></div>", unsafe_allow_html=True)
