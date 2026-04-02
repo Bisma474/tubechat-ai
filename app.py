@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from huggingface_hub import InferenceClient
 
 # ─────────────────────────────────────────────
-# PAGE CONFIG & CSS (Kept exactly the same)
+# PAGE CONFIG & CSS
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="TubeChat — YouTube AI Chatbot", page_icon="▶", layout="wide", initial_sidebar_state="expanded")
 
@@ -49,7 +49,6 @@ def load_embeddings_model():
 
 def get_transcript_via_rapidapi(video_id: str, api_key: str, api_host: str) -> str:
     """Fetches the transcript using a generic RapidAPI endpoint."""
-    # This URL might need to change slightly depending on WHICH RapidAPI you subscribed to.
     url = f"https://{api_host}/api/transcript"
     
     querystring = {"video_id": video_id}
@@ -65,13 +64,10 @@ def get_transcript_via_rapidapi(video_id: str, api_key: str, api_host: str) -> s
     
     data = response.json()
     
-    # Try to extract the text out of the API response (APIs return different formats)
-    # This loops through common JSON structures to find the transcript text.
     try:
         if isinstance(data, list):
             return " ".join([item.get('text', '') for item in data])
         elif isinstance(data, dict):
-            # Check for common keys
             if 'transcript' in data:
                 return " ".join([item.get('text', '') for item in data['transcript']])
             elif 'data' in data:
@@ -106,10 +102,17 @@ for k, v in defaults.items():
 with st.sidebar:
     st.markdown("<div class='brand-header'><div class='brand-icon'>▶</div><div><div class='brand-name'>TubeChat</div><div class='brand-sub'>YouTube × GenAI</div></div></div>", unsafe_allow_html=True)
 
-    st.markdown("#### 🔑 API Keys")
-    hf_token = st.text_input("HuggingFace Token", type="password", placeholder="hf_...", help="For the LLM Generation")
-    rapidapi_key = st.text_input("RapidAPI Key", type="password", placeholder="Enter your RapidAPI key", help="For bypassing YouTube blocks")
-    rapidapi_host = st.text_input("RapidAPI Host", value="youtube-transcript3.p.rapidapi.com", help="Check your RapidAPI code snippet for the correct host URL")
+    # 1. Try to load keys securely from Streamlit Secrets
+    try:
+        hf_token = st.secrets["HUGGINGFACE_TOKEN"]
+        rapidapi_key = st.secrets["RAPIDAPI_KEY"]
+        rapidapi_host = "youtube-transcript3.p.rapidapi.com"
+    except (KeyError, FileNotFoundError):
+        # 2. If secrets aren't found, show the manual input boxes
+        st.markdown("#### 🔑 API Keys")
+        hf_token = st.text_input("HuggingFace Token", type="password", placeholder="hf_...", help="For the LLM Generation")
+        rapidapi_key = st.text_input("RapidAPI Key", type="password", placeholder="Enter your RapidAPI key", help="For bypassing YouTube blocks")
+        rapidapi_host = st.text_input("RapidAPI Host", value="youtube-transcript3.p.rapidapi.com", help="Check your RapidAPI code snippet for the correct host URL")
 
     st.markdown("#### 🤖 Model")
     model_options = {"Mistral 7B Instruct": "mistralai/Mistral-7B-Instruct-v0.3", "Zephyr 7B Beta": "HuggingFaceH4/zephyr-7b-beta"}
@@ -144,7 +147,7 @@ st.divider()
 
 if load_btn:
     if not hf_token or not rapidapi_key:
-        st.error("⚠️ Please enter both HuggingFace and RapidAPI tokens in the sidebar.")
+        st.error("⚠️ Please enter both HuggingFace and RapidAPI tokens in the sidebar (or add them to secrets.toml).")
     elif not video_url:
         st.error("⚠️ Please paste a YouTube URL.")
     else:
