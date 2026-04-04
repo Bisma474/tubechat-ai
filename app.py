@@ -144,11 +144,11 @@ with st.sidebar:
 
     st.markdown("#### 🤖 Groq Model")
     model_options = {
-        "Llama 3 (8B)": "llama3-8b-8192", 
-        "Llama 3 (70B)": "llama3-70b-8192",
-        "Mixtral (8x7B)": "mixtral-8x7b-32768",
-        "Gemma 2 (9B)": "gemma2-9b-it"
-    }
+    "Llama 3.1 8B (Fast)":        "llama-3.1-8b-instant",
+    "Llama 3.3 70B (Best)":       "llama-3.3-70b-versatile",
+    "Llama 4 Scout 17B":          "meta-llama/llama-4-scout-17b-16e-instruct",
+    "Qwen3 32B":                  "qwen/qwen3-32b",
+}
     model_id = model_options[st.selectbox("Choose model", list(model_options.keys()))]
 
     st.divider()
