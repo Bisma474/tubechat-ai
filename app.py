@@ -51,7 +51,6 @@ def get_transcript_via_supadata(url: str, api_key: str) -> str:
     """Fetches the transcript using the Supadata SDK."""
     client = Supadata(api_key=api_key)
     
-    # Request plain text transcript
     response = client.transcript(
         url=url,
         lang="en",  
@@ -59,13 +58,12 @@ def get_transcript_via_supadata(url: str, api_key: str) -> str:
         mode="auto" 
     )
     
-    # Supadata returns immediate content for standard files
     if hasattr(response, 'content') and response.content:
         return response.content
     elif hasattr(response, 'job_id'):
-        raise ValueError(f"Video is too large and requires async processing (Job ID: {response.job_id}). This app currently only supports immediate processing.")
+        raise ValueError(f"Video requires async processing (Job ID: {response.job_id}).")
     else:
-        raise ValueError("Could not retrieve transcript from Supadata. The video might not have captions.")
+        raise ValueError("Could not retrieve transcript from Supadata.")
 
 def build_vectorstore(transcript: str, embeddings):
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100, separators=["\n\n", "\n", ". ", " ", ""])
@@ -140,7 +138,6 @@ if load_btn:
             try:
                 st.session_state.pipeline_step = 1
                 
-                # Fetching via Supadata SDK
                 transcript = get_transcript_via_supadata(video_url, supadata_key)
                 
                 progress.progress(35, text="✂️ Splitting & Embedding…")
@@ -178,10 +175,17 @@ else:
 
     user_q = st.text_input("Ask anything", placeholder="e.g. What are the key points?", label_visibility="collapsed")
     if st.button("Send ➤", use_container_width=True) and user_q.strip():
+        # Temporarily store the user's question in chat history
         st.session_state.chat_history.append({"role": "user", "content": user_q.strip()})
-        with st.spinner("🔍 Generating answer…"):
+        
+        # New error-handling block
+        with st.spinner("🔍 Generating answer… (If the AI is asleep, this may take 30s)"):
             try:
                 ans = answer_query(user_q.strip(), st.session_state.vectorstore, hf_token, model_id)
                 st.session_state.chat_history.append({"role": "assistant", "content": ans})
-            except Exception as e: st.error(str(e))
-        st.rerun()
+                st.rerun() # Success! Reload the UI to show the answer.
+            except Exception as e:
+                # Failure! Do NOT rerun, just show the error message.
+                st.session_state.chat_history.pop() # Remove the user's question so they can try again
+                st.error(f"⚠️ Hugging Face Error: {str(e)}")
+                st.info("💡 Tip: If it says 'Model is overloaded' or 'loading', just wait 30 seconds and click Send again!")
