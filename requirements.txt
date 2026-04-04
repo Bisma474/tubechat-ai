@@ -3,10 +3,10 @@ langchain-core
 langchain-community
 langchain-text-splitters
 langchain-huggingface
-huggingface-hub
 sentence-transformers
 transformers
 torch
 torchvision
 faiss-cpu
 supadata
+groq
