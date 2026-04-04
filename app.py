@@ -75,11 +75,22 @@ def answer_query(question: str, vectorstore, hf_token: str, model_id: str) -> st
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     relevant_docs = retriever.invoke(question)
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
-    prompt = f"You are an AI assistant answering questions based on the transcript.\n\nCONTEXT:\n{context}\n\nQUESTION: {question}\n\nANSWER:"
+    
+    # Hugging Face now requires the "chat" format!
+    messages = [
+        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context."},
+        {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"}
+    ]
+    
     client = InferenceClient(token=hf_token)
-    response = client.text_generation(prompt, model=model_id, max_new_tokens=512, temperature=0.3, repetition_penalty=1.1, do_sample=True)
-    return response.strip()
-
+    response = client.chat_completion(
+        messages=messages, 
+        model=model_id, 
+        max_tokens=512, 
+        temperature=0.3
+    )
+    
+    return response.choices[0].message.content.strip()
 # ─────────────────────────────────────────────
 # SESSION STATE & SIDEBAR
 # ─────────────────────────────────────────────
