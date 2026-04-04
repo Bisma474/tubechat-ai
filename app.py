@@ -6,7 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from huggingface_hub import InferenceClient
+from groq import Groq
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG & CSS
@@ -41,6 +41,7 @@ def extract_video_id(url: str) -> str | None:
 
 @st.cache_resource(show_spinner=False)
 def load_embeddings_model():
+    # Embeddings still run locally via sentence-transformers (100% free, no API key needed!)
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={"device": "cpu"},
@@ -71,26 +72,30 @@ def build_vectorstore(transcript: str, embeddings):
     vectorstore = FAISS.from_documents(docs, embeddings)
     return vectorstore, len(docs)
 
-def answer_query(question: str, vectorstore, hf_token: str, model_id: str) -> str:
+def answer_query(question: str, vectorstore, groq_api_key: str, model_id: str) -> str:
+    """Generates the answer using Groq's lightning-fast API"""
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     relevant_docs = retriever.invoke(question)
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
     
-    # Hugging Face now requires the "chat" format!
+    # Initialize Groq Client
+    client = Groq(api_key=groq_api_key)
+    
     messages = [
         {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context."},
         {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"}
     ]
     
-    client = InferenceClient(token=hf_token)
-    response = client.chat_completion(
-        messages=messages, 
-        model=model_id, 
-        max_tokens=512, 
-        temperature=0.3
+    # Call Groq API
+    completion = client.chat.completions.create(
+        model=model_id,
+        messages=messages,
+        temperature=0.3,
+        max_tokens=512,
     )
     
-    return response.choices[0].message.content.strip()
+    return completion.choices[0].message.content.strip()
+
 # ─────────────────────────────────────────────
 # SESSION STATE & SIDEBAR
 # ─────────────────────────────────────────────
@@ -99,14 +104,19 @@ for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
 # Keys are explicitly loaded from the backend secrets
-hf_token = st.secrets["HUGGINGFACE_TOKEN"]
+groq_api_key = st.secrets["GROQ_API_KEY"]
 supadata_key = st.secrets["SUPADATA_API_KEY"]
 
 with st.sidebar:
-    st.markdown("<div class='brand-header'><div class='brand-icon'>▶</div><div><div class='brand-name'>TubeChat</div><div class='brand-sub'>YouTube × GenAI</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-header'><div class='brand-icon'>▶</div><div><div class='brand-name'>TubeChat</div><div class='brand-sub'>YouTube × Groq AI</div></div></div>", unsafe_allow_html=True)
 
-    st.markdown("#### 🤖 Model")
-    model_options = {"Mistral 7B Instruct": "mistralai/Mistral-7B-Instruct-v0.3", "Zephyr 7B Beta": "HuggingFaceH4/zephyr-7b-beta"}
+    st.markdown("#### 🤖 Groq Model")
+    model_options = {
+        "Llama 3 (8B)": "llama3-8b-8192", 
+        "Llama 3 (70B)": "llama3-70b-8192",
+        "Mixtral (8x7B)": "mixtral-8x7b-32768",
+        "Gemma 2 (9B)": "gemma2-9b-it"
+    }
     model_id = model_options[st.selectbox("Choose model", list(model_options.keys()))]
 
     st.divider()
@@ -126,7 +136,7 @@ with st.sidebar:
 st.markdown("<h1 style='font-family:Space Mono,monospace;font-size:26px;font-weight:700;background:linear-gradient(135deg,#FF2D55,#FF9500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;'>TubeChat — Chat with any YouTube Video</h1>", unsafe_allow_html=True)
 
 def pipeline_html(step: int):
-    steps = [("📄", "Load"), ("✂️", "Split"), ("🔢", "Embed"), ("🗄️", "Index"), ("🔍", "Retrieve"), ("🧩", "Augment"), ("✨", "Generate")]
+    steps = [("📄", "Load"), ("✂️", "Split"), ("🔢", "Embed"), ("🗄️", "Index"), ("🔍", "Retrieve"), ("🧩", "Augment"), ("⚡", "Groq")]
     html = '<div class="pipeline-wrapper">'
     for i, (icon, label) in enumerate(steps):
         html += f'<div class="step-box {"active" if i < step else ""}"><div class="step-icon">{icon}</div><div>{label}</div></div>'
@@ -173,7 +183,7 @@ if load_btn:
                 st.error(f"❌ API Error: {str(e)}")
 
 if not st.session_state.video_loaded:
-    st.markdown("<div class='welcome-box'><div class='welcome-icon'>▶️</div><h2>Paste a YouTube URL to get started</h2><p>Using Supadata to fetch exact transcripts!</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='welcome-box'><div class='welcome-icon'>▶️</div><h2>Paste a YouTube URL to get started</h2><p>Using Supadata & lightning-fast Groq models!</p></div>", unsafe_allow_html=True)
 else:
     st.markdown(f"<div style='border-radius:14px;overflow:hidden;margin-bottom:20px;border:1px solid #2A2A38;'><iframe width='100%' height='300' src='https://www.youtube.com/embed/{st.session_state.video_id}' frameborder='0' allowfullscreen></iframe></div>", unsafe_allow_html=True)
     
@@ -189,14 +199,11 @@ else:
         # Temporarily store the user's question in chat history
         st.session_state.chat_history.append({"role": "user", "content": user_q.strip()})
         
-        # New error-handling block
-        with st.spinner("🔍 Generating answer… (If the AI is asleep, this may take 30s)"):
+        with st.spinner("⚡ Generating answer with Groq…"):
             try:
-                ans = answer_query(user_q.strip(), st.session_state.vectorstore, hf_token, model_id)
+                ans = answer_query(user_q.strip(), st.session_state.vectorstore, groq_api_key, model_id)
                 st.session_state.chat_history.append({"role": "assistant", "content": ans})
                 st.rerun() # Success! Reload the UI to show the answer.
             except Exception as e:
-                # Failure! Do NOT rerun, just show the error message.
                 st.session_state.chat_history.pop() # Remove the user's question so they can try again
-                st.error(f"⚠️ Hugging Face Error: {str(e)}")
-                st.info("💡 Tip: If it says 'Model is overloaded' or 'loading', just wait 30 seconds and click Send again!")
+                st.error(f"⚠️ Groq Error: {str(e)}")
