@@ -113,9 +113,10 @@ def answer_query(question: str, vectorstore, groq_api_key: str, model_id: str) -
     # Initialize Groq Client
     client = Groq(api_key=groq_api_key)
     
+    # CRITICAL FIX: Put the English rule in BOTH the system and user messages!
     messages = [
-        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context. YOU MUST ALWAYS RESPOND IN ENGLISH, NO MATTER WHAT LANGUAGE THE TRANSCRIPT OR QUESTION IS IN."},
-        {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"}
+        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context. CRITICAL RULE: You MUST write your final response ENTIRELY IN ENGLISH, even if the context or question is in Hindi or another language."},
+        {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}\n\nIMPORTANT: Translate your thoughts and write your final answer ONLY in English!"}
     ]
     
     # Call Groq API
