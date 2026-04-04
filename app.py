@@ -1,7 +1,7 @@
 import streamlit as st
 import re
 import time
-import requests
+from supadata import Supadata
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -32,6 +32,7 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; background-colo
 # HELPERS
 # ─────────────────────────────────────────────
 def extract_video_id(url: str) -> str | None:
+    """Used strictly to get the ID so we can embed the YouTube player in the UI."""
     patterns = [r"(?:v=|youtu\.be/|embed/|shorts/)([A-Za-z0-9_-]{11})"]
     for p in patterns:
         m = re.search(p, url)
@@ -46,38 +47,25 @@ def load_embeddings_model():
         encode_kwargs={"normalize_embeddings": True},
     )
 
-def extract_text_from_json(obj) -> list:
-    """Smartly digs through any JSON structure to find transcript text."""
-    texts = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if k in ['text', 'utf8', 'transcript'] and isinstance(v, str) and v.strip():
-                texts.append(v.strip())
-            else:
-                texts.extend(extract_text_from_json(v))
-    elif isinstance(obj, list):
-        for item in obj:
-            texts.extend(extract_text_from_json(item))
-    return texts
-
-def get_transcript_via_rapidapi(video_id: str, api_key: str, api_host: str) -> str:
-    """Fetches the transcript using the youtube138 RapidAPI endpoint."""
-    # youtube138 uses /video/transcript/ and parameter "id"
-    url = f"https://{api_host}/video/transcript/"
-    querystring = {"id": video_id}
-    headers = {"x-rapidapi-key": api_key, "x-rapidapi-host": api_host}
-
-    response = requests.get(url, headers=headers, params=querystring)
-    if response.status_code != 200:
-        raise ValueError(f"RapidAPI Error ({response.status_code}): {response.text}")
+def get_transcript_via_supadata(url: str, api_key: str) -> str:
+    """Fetches the transcript using the Supadata SDK."""
+    client = Supadata(api_key=api_key)
     
-    data = response.json()
-    extracted_texts = extract_text_from_json(data)
+    # Request plain text transcript
+    response = client.transcript(
+        url=url,
+        lang="en",  
+        text=True,  
+        mode="auto" 
+    )
     
-    if not extracted_texts:
-        raise ValueError("Could not find any text in the API response. The video might not have captions.")
-        
-    return " ".join(extracted_texts)
+    # Supadata returns immediate content for standard files
+    if hasattr(response, 'content') and response.content:
+        return response.content
+    elif hasattr(response, 'job_id'):
+        raise ValueError(f"Video is too large and requires async processing (Job ID: {response.job_id}). This app currently only supports immediate processing.")
+    else:
+        raise ValueError("Could not retrieve transcript from Supadata. The video might not have captions.")
 
 def build_vectorstore(transcript: str, embeddings):
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100, separators=["\n\n", "\n", ". ", " ", ""])
@@ -103,8 +91,7 @@ for k, v in defaults.items():
 
 # Keys are explicitly loaded from the backend secrets
 hf_token = st.secrets["HUGGINGFACE_TOKEN"]
-rapidapi_key = st.secrets["RAPIDAPI_KEY"]
-rapidapi_host = "youtube138.p.rapidapi.com" # UPDATED HOST
+supadata_key = st.secrets["SUPADATA_API_KEY"]
 
 with st.sidebar:
     st.markdown("<div class='brand-header'><div class='brand-icon'>▶</div><div><div class='brand-name'>TubeChat</div><div class='brand-sub'>YouTube × GenAI</div></div></div>", unsafe_allow_html=True)
@@ -149,10 +136,12 @@ if load_btn:
         else:
             st.session_state.chat_history = []
             st.session_state.video_loaded = False
-            progress = st.progress(15, text="📄 Fetching transcript via RapidAPI…")
+            progress = st.progress(15, text="📄 Fetching transcript via Supadata…")
             try:
                 st.session_state.pipeline_step = 1
-                transcript = get_transcript_via_rapidapi(video_id, rapidapi_key, rapidapi_host)
+                
+                # Fetching via Supadata SDK
+                transcript = get_transcript_via_supadata(video_url, supadata_key)
                 
                 progress.progress(35, text="✂️ Splitting & Embedding…")
                 st.session_state.pipeline_step = 2
@@ -176,7 +165,7 @@ if load_btn:
                 st.error(f"❌ API Error: {str(e)}")
 
 if not st.session_state.video_loaded:
-    st.markdown("<div class='welcome-box'><div class='welcome-icon'>▶️</div><h2>Paste a YouTube URL to get started</h2><p>Using RapidAPI to bypass YouTube blocks!</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='welcome-box'><div class='welcome-icon'>▶️</div><h2>Paste a YouTube URL to get started</h2><p>Using Supadata to fetch exact transcripts!</p></div>", unsafe_allow_html=True)
 else:
     st.markdown(f"<div style='border-radius:14px;overflow:hidden;margin-bottom:20px;border:1px solid #2A2A38;'><iframe width='100%' height='300' src='https://www.youtube.com/embed/{st.session_state.video_id}' frameborder='0' allowfullscreen></iframe></div>", unsafe_allow_html=True)
     
