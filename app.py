@@ -113,8 +113,8 @@ def answer_query(question: str, vectorstore, groq_api_key: str, model_id: str) -
     # Initialize Groq Client
     client = Groq(api_key=groq_api_key)
     
-    messages = [
-        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context."},
+        messages = [
+        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's question based ONLY on the provided transcript context. YOU MUST ALWAYS RESPOND IN ENGLISH, NO MATTER WHAT LANGUAGE THE TRANSCRIPT OR QUESTION IS IN."},
         {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"}
     ]
     
