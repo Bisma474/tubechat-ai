@@ -49,7 +49,7 @@ def load_embeddings_model():
     )
 
 def get_transcript_via_supadata(url: str, api_key: str) -> str:
-    """Fetches the transcript using the Supadata SDK."""
+    """Fetches the transcript using the Supadata SDK, handling async jobs for large videos."""
     client = Supadata(api_key=api_key)
     
     response = client.transcript(
@@ -59,10 +59,42 @@ def get_transcript_via_supadata(url: str, api_key: str) -> str:
         mode="auto" 
     )
     
+    # 1. If the video is short and processes immediately
     if hasattr(response, 'content') and response.content:
         return response.content
+        
+    # 2. If the video is long and requires async background processing
     elif hasattr(response, 'job_id'):
-        raise ValueError(f"Video requires async processing (Job ID: {response.job_id}).")
+        job_id = response.job_id
+        status_box = st.empty()
+        
+        # Loop up to 40 times (waiting 3 seconds each time) = 2 minutes max
+        for i in range(40): 
+            status_box.info(f"⏳ Video is large! Processing asynchronously in the background... (Wait a moment)")
+            time.sleep(3) 
+            
+            try:
+                # Ask Supadata if the job is finished yet
+                result = client.batch.get_batch_results(job_id)
+                
+                # Check safely depending on how Supadata formats the answer
+                status = result.get('status') if isinstance(result, dict) else getattr(result, 'status', '')
+                content = result.get('content') if isinstance(result, dict) else getattr(result, 'content', None)
+                
+                if status == "completed" or content:
+                    status_box.empty() # Clear the waiting message
+                    return content
+                elif status in ["failed", "error"]:
+                    status_box.empty()
+                    raise ValueError("Supadata failed to extract the transcript.")
+                    
+            except Exception:
+                # If it's not ready yet, just skip and check again in 3 seconds
+                pass
+                
+        status_box.empty()
+        raise ValueError("Timeout: The video took too long to process. Please try a shorter video.")
+        
     else:
         raise ValueError("Could not retrieve transcript from Supadata.")
 
